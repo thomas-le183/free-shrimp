@@ -76,6 +76,50 @@ prerelease: config.prerelease &&
 So the badge is free until you cut `1.0.0`. At that point, either accept normal releases or
 reintroduce an explicit prerelease scheme.
 
+## Switching between rc and stable
+
+The two directions are not symmetric. Verified against release-please 17.
+
+**Stable → rc** works from config alone. Add both keys:
+
+```json
+"versioning": "prerelease",
+"prerelease-type": "rc",
+```
+
+`0.2.1` + `feat:` → `0.3.0-rc`, then `0.3.0-rc.1`, `0.3.0-rc.2` … Note that once you are on an
+rc, *every* type (including a breaking change) only advances the counter.
+
+**rc → stable does NOT work from config alone.** Removing those keys leaves the suffix attached,
+because the default strategy bumps the numeric part without stripping the prerelease:
+
+```
+0.1.0-rc.3  + feat:  ->  0.2.0-rc.3     ← still an rc
+0.1.0-rc.3  + fix:   ->  0.1.1-rc.3
+```
+
+To actually graduate, remove the two keys **and** force the version once with a `Release-As:`
+footer, which overrides whatever the strategy computes:
+
+```sh
+git commit --allow-empty -m "chore: graduate to 0.3.0" -m "Release-As: 0.3.0"
+git push
+```
+
+```
+0.1.0-rc.3  + Release-As: 0.3.0  ->  0.3.0
+```
+
+Under squash-merge with the PR body as the commit message, putting `Release-As: 0.3.0` in a PR
+body works too. Editing `.release-please-manifest.json` by hand to the clean version is an
+alternative, but the footer leaves an audit trail in the history.
+
+`Release-As:` works under either strategy, so it is also the way to cut a one-off version without
+touching config at all — including jumping straight to `1.0.0`.
+
+**The badge is separate.** `prerelease: true` only controls the grey "Pre-release" label, and
+applies while the version has an `-rc` part *or* `major === 0`. Toggling it changes no numbers.
+
 ## Reset and retry
 
 ```sh
