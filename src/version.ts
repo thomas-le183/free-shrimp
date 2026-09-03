@@ -16,9 +16,23 @@ export interface ParsedTag {
 
 const TAG = /^v(\d+)\.(\d+)\.(\d+)(?:-([a-z]+)(?:\.(\d+))?)?$/;
 
-export function parseTag(tag: string): ParsedTag | null {
+/** Thrown by {@link parseTag} when a string is not a valid release tag. */
+export class InvalidTagError extends Error {
+  constructor(public readonly tag: string) {
+    super(`not a valid release tag: ${JSON.stringify(tag)}`);
+    this.name = 'InvalidTagError';
+  }
+}
+
+/**
+ * Parses a release tag.
+ *
+ * @throws {InvalidTagError} If the tag is malformed. Use {@link tryParseTag}
+ * when a non-tag is an expected input rather than a bug.
+ */
+export function parseTag(tag: string): ParsedTag {
   const m = TAG.exec(tag);
-  if (!m) return null;
+  if (!m) throw new InvalidTagError(tag);
 
   const [, major, minor, patch, preType, preCounter] = m;
 
@@ -33,8 +47,18 @@ export function parseTag(tag: string): ParsedTag | null {
   };
 }
 
+/** Like {@link parseTag}, but returns `null` instead of throwing. */
+export function tryParseTag(tag: string): ParsedTag | null {
+  try {
+    return parseTag(tag);
+  } catch (err) {
+    if (err instanceof InvalidTagError) return null;
+    throw err;
+  }
+}
+
 export function isPrerelease(tag: string): boolean {
-  return parseTag(tag)?.prerelease !== undefined;
+  return tryParseTag(tag)?.prerelease !== undefined;
 }
 
 export function formatTag(v: ParsedTag): string {
