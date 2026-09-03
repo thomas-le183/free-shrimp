@@ -6,7 +6,6 @@
       "package-name": "free-shrimp",
       "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": false,
-      "bump-minor-pre-major": true,
       "initial-version": "0.1.0",
       "draft": false,
       "changelog-sections": [
