@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/thomas-le183/free-shrimp/compare/v0.1.0...v1.0.0) (2026-09-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* add tag comparison utils, parseTag now throws ([#5](https://github.com/thomas-le183/free-shrimp/issues/5))
+
+### Features
+
+* add tag comparison utils, parseTag now throws ([#5](https://github.com/thomas-le183/free-shrimp/issues/5)) ([d00f402](https://github.com/thomas-le183/free-shrimp/commit/d00f4021991969c50fec8ea1d2637b0894b7e9ef))
+
 ## 0.1.0 (2026-09-03)
 
 
