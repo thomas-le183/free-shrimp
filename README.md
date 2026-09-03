@@ -5,13 +5,13 @@ A playground for testing [release-please](https://github.com/googleapis/release-
 ## What's here
 
 - [`.github/workflows/release-please.yml`](.github/workflows/release-please.yml) — runs only on
-  pushes to `dev`. It opens (or updates) a release PR, and merging that PR tags an `rc`
-  prerelease. `main` is not managed by release-please at all — no config, no release PR, no tags.
+  pushes to `dev`. It opens (or updates) a release PR, and merging that PR tags a version and
+  publishes it. `main` is not managed by release-please at all — no config, no release PR, no tags.
 - [`.github/workflows/pr-title.yml`](.github/workflows/pr-title.yml) — checks that PR titles are
   Conventional Commits, since the squashed title is what release-please reads.
 - [`release-please-config.json`](release-please-config.json) +
   [`.release-please-manifest.json`](.release-please-manifest.json) — the one and only release
-  line: `vX.Y.Z-rc.N` prereleases plus a `CHANGELOG.md`. Every conventional type is listed in
+  line: `vX.Y.Z` versions plus a `CHANGELOG.md`. Every conventional type is listed in
   `changelog-sections`, so *every* merged PR shows up — not just `feat`/`fix`.
 - [`package.json`](package.json) + [`tsconfig.json`](tsconfig.json) — a private package with a
   strict `npm run typecheck`. Not touched by release-please (`release-type: simple`); its
@@ -20,8 +20,8 @@ A playground for testing [release-please](https://github.com/googleapis/release-
 ## The flow
 
 ```
-feature PR ──► dev ──► release PR "chore(dev): release 0.1.0-rc.1"
-                          └─ merge ──► tag v0.1.0-rc.1  (GitHub prerelease)
+feature PR ──► dev ──► release PR "chore(dev): release 0.2.0"
+                          └─ merge ──► tag v0.2.0  (flagged prerelease while 0.x)
                                           └─ QC tests this build
 ```
 
@@ -49,7 +49,7 @@ build:
 ```sh
 gh pr list --base dev --label 'autorelease: pending'
 gh pr merge <n> --squash
-gh release view v0.1.0-rc.1
+gh release view v0.2.0
 ```
 
 ## How versions are computed
@@ -58,24 +58,28 @@ Verified against release-please's `PrereleaseVersioningStrategy`:
 
 | current | commit | next |
 |---|---|---|
-| `0.0.0` | `feat:` | `0.1.0-rc` |
-| `0.1.0-rc` | `feat:` or `fix:` | `0.1.0-rc.1` |
-| `0.1.0-rc.1` | `feat:` or `fix:` | `0.1.0-rc.2` |
+| `0.1.0` | `feat:` | `0.2.0` |
+| `0.2.0` | `fix:` / `chore:` / `docs:` … | `0.2.1` |
+| `0.2.1` | `feat!:` (breaking) | `0.3.0` |
 
-Note the first rc has no number (`0.1.0-rc`, not `0.1.0-rc.0`) — the strategy only appends `.1`
-once there is a prerelease to increment. While the version is a prerelease with `patch == 0`,
-both `feat:` and `fix:` just advance the rc number rather than moving the minor; the minor was
-already claimed when the prerelease line opened.
+Pre-1.0, `bump-minor-pre-major` keeps breaking changes on the minor rather than jumping to
+`1.0.0`.
 
-Pre-1.0, `bump-minor-pre-major` keeps breaking changes on the minor rather than going to `1.0.0`.
+Releases are still flagged as prereleases on GitHub (grey badge, excluded from "Latest"). That
+comes from `prerelease: true`, which applies while `major === 0` — see `manifest.ts`:
 
-Nothing here ever cuts a stable, non-`-rc` tag. If you later want one — say, on merge to `main` —
-that needs its own config, manifest, and workflow trigger back on that branch.
+```js
+prerelease: config.prerelease &&
+  (!!release.tag.version.preRelease || release.tag.version.major === 0)
+```
+
+So the badge is free until you cut `1.0.0`. At that point, either accept normal releases or
+reintroduce an explicit prerelease scheme.
 
 ## Reset and retry
 
 ```sh
-gh release delete v0.1.0-rc --cleanup-tag --yes
+gh release delete v0.2.0 --cleanup-tag --yes
 ```
 
 Then reset `.release-please-manifest.json` to the previous version and delete the
@@ -89,19 +93,20 @@ Then reset `.release-please-manifest.json` to the previous version and delete th
 - **If you add a job that reacts to a release, put it in this workflow** — release-please tags with
   `GITHUB_TOKEN`, and GitHub suppresses workflow triggers on refs pushed by that token, to avoid
   recursion. A separate `on: push: tags: ['v*']` workflow would never fire.
-- **`prerelease: true` vs `versioning: prerelease`** — the first only flags the GitHub Release as
-  a prerelease (the grey "Pre-release" badge, excluded from "latest"). The second is what actually
-  produces `-rc` version numbers. You need both; setting only the first gives you stable version
-  numbers wearing a prerelease badge.
+- **`prerelease: true` vs `versioning: prerelease`** — two unrelated things. The first only flags
+  the GitHub Release with the grey "Pre-release" badge. The second rewrites the *numbers* into
+  `-rc` form, and it is deliberately not used here: with no stable line to graduate into, the rc
+  counter is the only thing that ever moves. `feat`, `fix`, a breaking change and a `chore` all
+  collapse to `0.1.0-rc.N+1`, so the version stops carrying any information at all.
 - **Visible == releasable** — release-please decides whether to release by rendering the changelog
   text and checking `changelogEntry.split('\n').length <= 1`. So a commit type that is hidden from
   the changelog also cannot trigger a release. That is one switch, not two: `changelog-sections`
   controls both. By default `chore`, `docs`, `refactor`, `test`, `build`, `ci` and `style` are all
   hidden, which is why a `chore:` PR used to produce absolutely nothing.
 - **Releases are batched, not one-per-PR** — release-please keeps a single release PR open and
-  force-pushes it as more PRs land. Three merged PRs then one release PR merge = one rc containing
-  all three. To get one rc per merged PR, the release PR has to be merged after each one (enabling
-  auto-merge on it is the usual way).
+  force-pushes it as more PRs land. Three merged PRs then one release PR merge = one release
+  containing all three. To get one release per merged PR, the release PR has to be merged after
+  each one (enabling auto-merge on it is the usual way).
 - **`permissions`** — the job needs `contents: write` *and* `pull-requests: write` (it opens the
   PR). The workflow's top-level default is `contents: read`. Drop either write and watch the 403.
 - **Version pinning** — both actions are pinned to commit SHAs rather than moving `@v5`/`@v6`
