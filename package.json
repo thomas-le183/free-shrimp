@@ -1,6 +1,6 @@
 {
   "name": "free-shrimp",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "A playground for testing release-please across a dev -> main branch flow.",
   "license": "MIT",
