@@ -3,6 +3,24 @@
 # Usage: scripts/build-artifacts.sh <tag>
 set -euo pipefail
 
+usage() {
+  cat <<'USAGE'
+Usage: build-artifacts.sh <tag>
+
+Builds the release artifacts for <tag> into dist/:
+  hello-<tag>.txt          plain-text build stamp
+  free-shrimp-<tag>.tar.gz the stamp, tarred
+  SHA256SUMS               checksums for both
+
+<tag> is used verbatim in the filenames, so pass it exactly as the git tag
+(e.g. v1.2.3 or v1.2.3-rc.1).
+USAGE
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+esac
+
 TAG="${1:?usage: build-artifacts.sh <tag>}"
 DIST="dist"
 
