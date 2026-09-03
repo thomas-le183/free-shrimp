@@ -11,7 +11,8 @@ A playground for testing [release-please](https://github.com/googleapis/release-
   Conventional Commits, since the squashed title is what release-please reads.
 - [`release-please-config.json`](release-please-config.json) +
   [`.release-please-manifest.json`](.release-please-manifest.json) — the one and only release
-  line: `vX.Y.Z-rc.N` prereleases, no changelog file (`skip-changelog`).
+  line: `vX.Y.Z-rc.N` prereleases plus a `CHANGELOG.md`. Every conventional type is listed in
+  `changelog-sections`, so *every* merged PR shows up — not just `feat`/`fix`.
 - [`package.json`](package.json) + [`tsconfig.json`](tsconfig.json) — a private package with a
   strict `npm run typecheck`. Not touched by release-please (`release-type: simple`); its
   `version` field stays at `0.0.0`.
@@ -92,11 +93,15 @@ Then reset `.release-please-manifest.json` to the previous version and delete th
   a prerelease (the grey "Pre-release" badge, excluded from "latest"). The second is what actually
   produces `-rc` version numbers. You need both; setting only the first gives you stable version
   numbers wearing a prerelease badge.
-- **`skip-changelog: true`** — worth reconsidering now that this is the only release line. It made
-  sense when a separate `main` config also wrote a stable `CHANGELOG.md` and rc entries would have
-  duplicated it. With that gone, this is the only place a changelog could live; each rc's notes
-  still render in full on its GitHub Release page even with the file skipped, so nothing is lost,
-  but there's no longer a committed history of what shipped.
+- **Visible == releasable** — release-please decides whether to release by rendering the changelog
+  text and checking `changelogEntry.split('\n').length <= 1`. So a commit type that is hidden from
+  the changelog also cannot trigger a release. That is one switch, not two: `changelog-sections`
+  controls both. By default `chore`, `docs`, `refactor`, `test`, `build`, `ci` and `style` are all
+  hidden, which is why a `chore:` PR used to produce absolutely nothing.
+- **Releases are batched, not one-per-PR** — release-please keeps a single release PR open and
+  force-pushes it as more PRs land. Three merged PRs then one release PR merge = one rc containing
+  all three. To get one rc per merged PR, the release PR has to be merged after each one (enabling
+  auto-merge on it is the usual way).
 - **`permissions`** — the job needs `contents: write` *and* `pull-requests: write` (it opens the
   PR). The workflow's top-level default is `contents: read`. Drop either write and watch the 403.
 - **Version pinning** — both actions are pinned to commit SHAs rather than moving `@v5`/`@v6`

@@ -4,13 +4,26 @@
     ".": {
       "release-type": "simple",
       "package-name": "free-shrimp",
+      "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": false,
       "bump-minor-pre-major": true,
       "versioning": "prerelease",
       "prerelease-type": "rc",
       "prerelease": true,
-      "skip-changelog": true,
-      "draft": false
+      "draft": false,
+      "changelog-sections": [
+        { "type": "feat", "section": "Features" },
+        { "type": "fix", "section": "Bug Fixes" },
+        { "type": "perf", "section": "Performance" },
+        { "type": "revert", "section": "Reverts" },
+        { "type": "refactor", "section": "Refactoring" },
+        { "type": "docs", "section": "Documentation" },
+        { "type": "test", "section": "Tests" },
+        { "type": "build", "section": "Build System" },
+        { "type": "ci", "section": "CI" },
+        { "type": "style", "section": "Styles" },
+        { "type": "chore", "section": "Chores" }
+      ]
     }
   }
 }
