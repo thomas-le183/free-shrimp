@@ -9,7 +9,7 @@ published as a GitHub Release.
 ## What's here
 
 - [`.github/workflows/release-please.yml`](.github/workflows/release-please.yml) — runs only on
-  pushes to `dev`. It opens (or updates) a release PR; merging that PR appends to `CHANGELOG.md`
+  pushes to `dev`. It opens (or updates) a release PR; merging that PR appends to `CHANGELOG-DEV.md`
   and bumps `.release-please-manifest.json`. Nothing else. `main` is not managed by release-please
   at all — no config, no release PR, no changelog.
 - [`.github/workflows/pr-title.yml`](.github/workflows/pr-title.yml) — checks that PR titles are
@@ -25,7 +25,7 @@ published as a GitHub Release.
 
 ```
 feature PR ──► dev ──► release PR "chore(dev): release 0.2.0"
-                          └─ merge ──► CHANGELOG.md + manifest updated
+                          └─ merge ──► CHANGELOG-DEV.md + manifest updated
                                        (no tag, no release, no package.json bump)
 ```
 
@@ -49,7 +49,7 @@ Two settings in [`release-please-config.json`](release-please-config.json) do al
   tracking survives because the manifest strategy reads the last version out of
   `.release-please-manifest.json`, which the release PR itself updates, rather than out of tags.
 - **`release-type: simple`** decides which files get written. Its updater list is exactly
-  `CHANGELOG.md` plus `version.txt`, and the `version.txt` update is registered with
+  `CHANGELOG-DEV.md` plus `version.txt`, and the `version.txt` update is registered with
   `createIfMissing: false` — see
   [`strategies/simple.ts`](https://github.com/googleapis/release-please/blob/main/src/strategies/simple.ts):
 
@@ -61,9 +61,9 @@ Two settings in [`release-please-config.json`](release-please-config.json) do al
   });
   ```
 
-  There is no `version.txt` in this repo, so that update is a no-op and `CHANGELOG.md` is the only
-  file touched. The `node` release type would instead rewrite `package.json`'s `version`, which is
-  precisely what we don't want.
+  There is no `version.txt` in this repo, so that update is a no-op and `CHANGELOG-DEV.md` (set by
+  `changelog-path`) is the only file touched. The `node` release type would instead rewrite
+  `package.json`'s `version`, which is precisely what we don't want.
 
 So release-please's version and the app's version are deliberately decoupled. The number in the
 release PR title (`chore(dev): release 0.2.0`) is an index into the changelog, nothing more.
@@ -85,7 +85,7 @@ should be updated:
 ```sh
 gh pr list --base dev --label 'autorelease: pending'
 gh pr merge <n> --squash
-git checkout dev && git pull && cat CHANGELOG.md
+git checkout dev && git pull && cat CHANGELOG-DEV.md
 ```
 
 ## How versions are computed
@@ -152,9 +152,9 @@ There is nothing to unpublish, so a reset is just local state:
 
 ```sh
 # 1. put the manifest back to the previous version (0.0.0 to start from scratch)
-# 2. drop the changelog entries you want to redo from CHANGELOG.md
+# 2. drop the changelog entries you want to redo from CHANGELOG-DEV.md
 # 3. delete the branch release-please works from, or it will reuse the old PR
-git push origin :release-please--branches--dev
+git push origin :release-please--branches--dev--components--free-shrimp
 ```
 
 If a release PR was already merged, its `autorelease: tagged` label is what release-please uses to
@@ -163,6 +163,11 @@ excluded from the next changelog.
 
 ## Things worth poking at
 
+- **Old release commits show up as entries** — with `chore` visible in `changelog-sections`, the
+  historical `chore(dev): release X` merge commits appear under Chores in a regenerated changelog.
+  They are ordinary commits once their release PRs are no longer the boundary. Drop `chore` from
+  `changelog-sections` if that noise bothers you, but remember it also stops `chore:` PRs from
+  triggering a release PR at all.
 - **Visible == releasable** — release-please decides whether to open a release PR by rendering the
   changelog text and checking `changelogEntry.split('\n').length <= 1`. So a commit type that is
   hidden from the changelog also cannot trigger one. That is one switch, not two:
