@@ -18,13 +18,14 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      # dev is the only branch release-please manages: every merge to dev that
-      # carries a feat:/fix:/perf:/revert: commit gets an rc prerelease. main is
-      # not released from directly — see README for the promotion story.
+      # release-please is used here purely as a changelog generator. dev is the
+      # only branch it manages, and merging its release PR touches nothing but
+      # CHANGELOG.md: release-type "simple" would write version.txt, but only if
+      # that file already exists, and it does not. skip-github-release means no
+      # tag and no GitHub release either. The version release-please counts with
+      # lives solely in .release-please-manifest.json and is deliberately not
+      # package.json's version. main is not released from — see README.
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
         with:

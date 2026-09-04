@@ -2,35 +2,71 @@
 
 A playground for testing [release-please](https://github.com/googleapis/release-please-action).
 
+Here it is used as a **changelog generator only**. It computes a version, but that version is
+release-please's own bookkeeping — it is never written to `package.json`, never tagged, and never
+published as a GitHub Release.
+
 ## What's here
 
 - [`.github/workflows/release-please.yml`](.github/workflows/release-please.yml) — runs only on
-  pushes to `dev`. It opens (or updates) a release PR, and merging that PR tags a version and
-  publishes it. `main` is not managed by release-please at all — no config, no release PR, no tags.
+  pushes to `dev`. It opens (or updates) a release PR; merging that PR appends to `CHANGELOG.md`
+  and bumps `.release-please-manifest.json`. Nothing else. `main` is not managed by release-please
+  at all — no config, no release PR, no changelog.
 - [`.github/workflows/pr-title.yml`](.github/workflows/pr-title.yml) — checks that PR titles are
   Conventional Commits, since the squashed title is what release-please reads.
 - [`release-please-config.json`](release-please-config.json) +
-  [`.release-please-manifest.json`](.release-please-manifest.json) — the one and only release
-  line: `vX.Y.Z` versions plus a `CHANGELOG.md`. Every conventional type is listed in
-  `changelog-sections`, so *every* merged PR shows up — not just `feat`/`fix`.
+  [`.release-please-manifest.json`](.release-please-manifest.json) — the config, and the single
+  place the version lives. Every conventional type is listed in `changelog-sections`, so *every*
+  merged PR shows up — not just `feat`/`fix`.
 - [`package.json`](package.json) + [`tsconfig.json`](tsconfig.json) — a private package with a
-  strict `npm run typecheck`. Not touched by release-please (`release-type: simple`); its
-  `version` field stays at `0.0.0`.
+  strict `npm run typecheck`. Its `version` field stays at `0.0.0` forever; see below for why.
 
 ## The flow
 
 ```
 feature PR ──► dev ──► release PR "chore(dev): release 0.2.0"
-                          └─ merge ──► tag v0.2.0  (flagged prerelease while 0.x)
-                                          └─ QC tests this build
+                          └─ merge ──► CHANGELOG.md + manifest updated
+                                       (no tag, no release, no package.json bump)
 ```
 
-Develop and QC work on `dev`. Every batch of conventional commits that lands there produces a
-tagged, downloadable prerelease, so QC always has a specific version to point at.
+Develop and QC work on `dev`. Every batch of conventional commits that lands there rolls into the
+open release PR, and merging it publishes those entries to the changelog.
 
-`main` sits outside this loop on purpose — nothing here tags or releases from it. If you still
-promote `dev` → `main` for deploys, do that with a plain merge (not squash) so the history isn't
-collapsed; release-please just won't be involved on that side.
+`main` sits outside this loop on purpose. If you promote `dev` → `main` for deploys, do that with
+a plain merge (not squash) so the history isn't collapsed; release-please just won't be involved
+on that side.
+
+## Why nothing but the changelog changes
+
+Two settings in [`release-please-config.json`](release-please-config.json) do all of it:
+
+```json
+"release-type": "simple",
+"skip-github-release": true,
+```
+
+- **`skip-github-release`** drops the entire release step — no git tag, no GitHub Release. Version
+  tracking survives because the manifest strategy reads the last version out of
+  `.release-please-manifest.json`, which the release PR itself updates, rather than out of tags.
+- **`release-type: simple`** decides which files get written. Its updater list is exactly
+  `CHANGELOG.md` plus `version.txt`, and the `version.txt` update is registered with
+  `createIfMissing: false` — see
+  [`strategies/simple.ts`](https://github.com/googleapis/release-please/blob/main/src/strategies/simple.ts):
+
+  ```ts
+  updates.push({
+    path: this.addPath(this.versionFile),   // version.txt
+    createIfMissing: false,                 // ← absent file stays absent
+    updater: new DefaultUpdater({version}),
+  });
+  ```
+
+  There is no `version.txt` in this repo, so that update is a no-op and `CHANGELOG.md` is the only
+  file touched. The `node` release type would instead rewrite `package.json`'s `version`, which is
+  precisely what we don't want.
+
+So release-please's version and the app's version are deliberately decoupled. The number in the
+release PR title (`chore(dev): release 0.2.0`) is an index into the changelog, nothing more.
 
 ## Day to day
 
@@ -43,18 +79,18 @@ gh pr create --base dev --title "feat: add a thing" --body ""
 gh pr merge --squash --delete-branch
 ```
 
-release-please then keeps a `chore(dev): release …` PR open. Merge it whenever QC needs a fresh
-build:
+release-please then keeps a `chore(dev): release …` PR open. Merge it whenever the changelog
+should be updated:
 
 ```sh
 gh pr list --base dev --label 'autorelease: pending'
 gh pr merge <n> --squash
-gh release view v0.2.0
+git checkout dev && git pull && cat CHANGELOG.md
 ```
 
 ## How versions are computed
 
-Verified against release-please's `PrereleaseVersioningStrategy`:
+The numbers still follow normal semver rules, they just land in the changelog instead of a tag:
 
 | current | commit | next |
 |---|---|---|
@@ -63,18 +99,8 @@ Verified against release-please's `PrereleaseVersioningStrategy`:
 | `0.2.1` | `feat!:` (breaking) | `0.3.0` |
 
 Pre-1.0, `bump-minor-pre-major` keeps breaking changes on the minor rather than jumping to
-`1.0.0`.
-
-Releases are still flagged as prereleases on GitHub (grey badge, excluded from "Latest"). That
-comes from `prerelease: true`, which applies while `major === 0` — see `manifest.ts`:
-
-```js
-prerelease: config.prerelease &&
-  (!!release.tag.version.preRelease || release.tag.version.major === 0)
-```
-
-So the badge is free until you cut `1.0.0`. At that point, either accept normal releases or
-reintroduce an explicit prerelease scheme.
+`1.0.0`. `initial-version: 0.1.0` sets where the very first entry starts, from a manifest seeded
+at `0.0.0`.
 
 ## Switching between rc and stable
 
@@ -117,45 +143,45 @@ alternative, but the footer leaves an audit trail in the history.
 `Release-As:` works under either strategy, so it is also the way to cut a one-off version without
 touching config at all — including jumping straight to `1.0.0`.
 
-**The badge is separate.** `prerelease: true` only controls the grey "Pre-release" label, and
-applies while the version has an `-rc` part *or* `major === 0`. Toggling it changes no numbers.
+The `prerelease: true` flag is unrelated and now pointless here: it only controlled the grey
+"Pre-release" badge on a GitHub Release, and there are no releases to badge.
 
 ## Reset and retry
 
+There is nothing to unpublish, so a reset is just local state:
+
 ```sh
-gh release delete v0.2.0 --cleanup-tag --yes
+# 1. put the manifest back to the previous version (0.0.0 to start from scratch)
+# 2. drop the changelog entries you want to redo from CHANGELOG.md
+# 3. delete the branch release-please works from, or it will reuse the old PR
+git push origin :release-please--branches--dev
 ```
 
-Then reset `.release-please-manifest.json` to the previous version and delete the
-`release-please--branches--dev` branch, or release-please will think the version is already out.
+If a release PR was already merged, its `autorelease: tagged` label is what release-please uses to
+find the last release point — remove that label from the merged PR too, or history before it stays
+excluded from the next changelog.
 
 ## Things worth poking at
 
-- **The job's outputs** — `release_created` and `tag_name` are exported but currently unused. They
-  are the hook for any follow-on job (build, publish, deploy) that should run only when a release
-  actually happened.
-- **If you add a job that reacts to a release, put it in this workflow** — release-please tags with
-  `GITHUB_TOKEN`, and GitHub suppresses workflow triggers on refs pushed by that token, to avoid
-  recursion. A separate `on: push: tags: ['v*']` workflow would never fire.
-- **`prerelease: true` vs `versioning: prerelease`** — two unrelated things. The first only flags
-  the GitHub Release with the grey "Pre-release" badge. The second rewrites the *numbers* into
-  `-rc` form, and it is deliberately not used here: with no stable line to graduate into, the rc
-  counter is the only thing that ever moves. `feat`, `fix`, a breaking change and a `chore` all
-  collapse to `0.1.0-rc.N+1`, so the version stops carrying any information at all.
-- **Visible == releasable** — release-please decides whether to release by rendering the changelog
-  text and checking `changelogEntry.split('\n').length <= 1`. So a commit type that is hidden from
-  the changelog also cannot trigger a release. That is one switch, not two: `changelog-sections`
-  controls both. By default `chore`, `docs`, `refactor`, `test`, `build`, `ci` and `style` are all
-  hidden, which is why a `chore:` PR used to produce absolutely nothing.
-- **Releases are batched, not one-per-PR** — release-please keeps a single release PR open and
-  force-pushes it as more PRs land. Three merged PRs then one release PR merge = one release
-  containing all three. To get one release per merged PR, the release PR has to be merged after
-  each one (enabling auto-merge on it is the usual way).
+- **Visible == releasable** — release-please decides whether to open a release PR by rendering the
+  changelog text and checking `changelogEntry.split('\n').length <= 1`. So a commit type that is
+  hidden from the changelog also cannot trigger one. That is one switch, not two:
+  `changelog-sections` controls both. By default `chore`, `docs`, `refactor`, `test`, `build`, `ci`
+  and `style` are all hidden, which is why a `chore:` PR used to produce absolutely nothing.
+- **Entries are batched, not one-per-PR** — release-please keeps a single release PR open and
+  force-pushes it as more PRs land. Three merged PRs then one release PR merge = one changelog
+  section containing all three. To get one section per merged PR, the release PR has to be merged
+  after each one (enabling auto-merge on it is the usual way).
 - **`permissions`** — the job needs `contents: write` *and* `pull-requests: write` (it opens the
   PR). The workflow's top-level default is `contents: read`. Drop either write and watch the 403.
+  `contents: write` is still required even with `skip-github-release`, because release-please
+  pushes the release branch.
+- **No `release_created` output any more** — with the release step skipped, that output is always
+  empty, so it was removed from the workflow. A follow-on job (build, publish, deploy) can no
+  longer gate on it; gate on the release PR merge instead.
 - **Version pinning** — both actions are pinned to commit SHAs rather than moving `@v5`/`@v6`
-  tags, so a compromised or retagged upstream can't change what runs here.
-  [`.github/dependabot.yml`](.github/dependabot.yml) bumps them weekly. Note that release tags
+  tags, so a compromised or retagged upstream can't change what runs here. There is no
+  `dependabot.yml`, so bumping them is manual. Note that release tags
   are often *annotated*, so the SHA must be the commit the tag dereferences to
   (`git ls-remote <repo> 'refs/tags/v5^{}'`) — the tag object's own SHA is rejected.
 
