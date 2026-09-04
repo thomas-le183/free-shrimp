@@ -4,8 +4,10 @@ A playground for testing [release-please](https://github.com/googleapis/release-
 
 Here it is used as a **changelog generator only**. It computes a version, but that version is
 release-please's own bookkeeping — it is never written to `package.json` and never published as a
-GitHub Release. A bare `v<version>` git tag *is* pushed, purely so release-please knows where the
-last changelog entry stopped; nothing is published or installable from it.
+GitHub Release. A bare `free-shrimp-v<version>` git tag *is* pushed, purely so release-please
+knows where the last changelog entry stopped; nothing is published or installable from it. The
+`free-shrimp-` prefix keeps it clear of the plain `v<version>` tags and Releases you cut by hand
+— see below.
 
 ## What's here
 
@@ -27,7 +29,7 @@ last changelog entry stopped; nothing is published or installable from it.
 ```
 feature PR ──► dev ──► release PR "chore(dev): release 0.2.0"
                           └─ merge ──► CHANGELOG-DEV.md + manifest updated
-                                       (bookkeeping tag only, no release,
+                                       (free-shrimp-v tag only, no release,
                                         no package.json bump)
 ```
 
@@ -53,9 +55,17 @@ Two settings in [`release-please-config.json`](release-please-config.json) do al
   *commit window*. release-please decides what is already changelogged by looking for a GitHub
   Release and then falling back to a git tag; given neither it bootstraps from the first commit in
   the repo, re-reads every `feat!` ever merged, and bumps major on every single run. So the
-  workflow pushes a bare `v<version>` tag itself, before invoking release-please. A tag is not a
+  workflow pushes a bare tag itself, before invoking release-please. A tag is not a
   release — nothing is published and nothing appears in the Releases tab. It is bookkeeping, same
   as the manifest, and it is what makes ordinary minor and patch bumps work.
+
+  That tag is namespaced. `include-component-in-tag: true` makes release-please build and look for
+  `<package-name>-v<version>` — here `free-shrimp-v1.1.0` — rather than a bare `v1.1.0`. Releases
+  are cut **by hand** in this repo, and a hand-cut `v1.2.0` tag or GitHub Release sitting in the
+  same namespace would be picked up as release-please's own last release point, silently handing
+  control of the changelog numbering to the manual release cadence. The prefix makes the two lanes
+  invisible to each other: tag your manual releases `v<version>` and release-please will never see
+  them.
 - **`release-type: simple`** decides which files get written. Its updater list is exactly
   `CHANGELOG-DEV.md` plus `version.txt`, and the `version.txt` update is registered with
   `createIfMissing: false` — see
@@ -98,17 +108,23 @@ git checkout dev && git pull && cat CHANGELOG-DEV.md
 
 ## How versions are computed
 
-The numbers still follow normal semver rules, they just land in the changelog instead of a tag:
+The numbers follow plain semver, they just land in the changelog instead of a release. The
+manifest starts at `1.1.0`, so the post-1.0 rules apply:
 
 | current | commit | next |
 |---|---|---|
-| `0.1.0` | `feat:` | `0.2.0` |
-| `0.2.0` | `fix:` / `chore:` / `docs:` … | `0.2.1` |
-| `0.2.1` | `feat!:` (breaking) | `0.3.0` |
+| `1.1.0` | `feat:` | `1.2.0` |
+| `1.2.0` | `fix:` / `chore:` / `docs:` … | `1.2.1` |
+| `1.2.1` | `feat!:` (breaking) | `2.0.0` |
 
-Pre-1.0, `bump-minor-pre-major` keeps breaking changes on the minor rather than jumping to
-`1.0.0`. `initial-version: 0.1.0` sets where the very first entry starts, from a manifest seeded
-at `0.0.0`.
+`bump-minor-pre-major` is **not** set, and below 1.0 that matters: without it a `feat!:` jumps
+straight to `1.0.0` instead of bumping the minor. That is half of how the runaway major loop got
+started — the two `feat!` commits in the history each demanded a major. It is a no-op at the
+current version, so it stays out of the config; add it only if you ever reset the manifest back
+below `1.0.0`.
+
+`initial-version` only sets where the very first entry starts, from a manifest seeded at `0.0.0`,
+and is spent.
 
 ## Switching between rc and stable
 

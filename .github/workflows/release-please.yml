@@ -59,9 +59,16 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           version="$(jq -r '."."' .release-please-manifest.json)"
-          # Must match the manifest exactly; release-please compares the parsed
-          # tag version against it and ignores anything that does not line up.
-          tag="v${version}"
+          component="$(jq -r '.packages["."]["package-name"]' release-please-config.json)"
+          # Must match what release-please looks for, exactly. TagName.toString()
+          # builds `<component><separator>v<version>`, with the separator
+          # defaulting to "-" -- and release-please ignores any tag whose parsed
+          # version does not line up with the manifest.
+          #
+          # The component prefix is what keeps this lane separate from the
+          # releases cut by hand: a manual `v1.2.0` tag or GitHub Release is
+          # invisible here, so it cannot hijack the changelog numbering.
+          tag="${component}-v${version}"
           if gh api "repos/{owner}/{repo}/git/ref/tags/${tag}" >/dev/null 2>&1; then
             echo "${tag} already exists"
             exit 0
