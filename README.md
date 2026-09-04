@@ -181,6 +181,17 @@ excluded from the next changelog.
   PR). The workflow's top-level default is `contents: read`. Drop either write and watch the 403.
   `contents: write` is still required even with `skip-github-release`, because release-please
   pushes the release branch.
+- **`skip-github-release` jams after the first merged release PR** — release-please marks a release
+  PR `autorelease: pending`, and it is the *release step* that swaps that for `autorelease: tagged`
+  once the tag is cut. `skip-github-release` deletes that step, so the label never moves. On the
+  next run release-please finds a merged PR still marked pending and aborts with `There are
+  untagged, merged release PRs outstanding` — no new release PR, no changelog, and a green check on
+  the workflow, because aborting is not a failure. The setup works exactly once and then stops.
+  The `Settle merged release PRs left pending` step in
+  [`release-please.yml`](.github/workflows/release-please.yml) does the label swap the missing
+  release step would have done. If you hit the jam before that step existed, clear it by hand:
+  `gh pr edit <n> --remove-label 'autorelease: pending' --add-label 'autorelease: tagged'`, then
+  re-run the workflow.
 - **No `release_created` output any more** — with the release step skipped, that output is always
   empty, so it was removed from the workflow. A follow-on job (build, publish, deploy) can no
   longer gate on it; gate on the release PR merge instead.

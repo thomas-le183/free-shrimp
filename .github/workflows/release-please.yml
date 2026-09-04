@@ -19,6 +19,27 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      # skip-github-release (below) drops release-please's release step — and
+      # that step is what flips a merged release PR's `autorelease: pending`
+      # label to `autorelease: tagged`. Left pending, the merged PR reads as an
+      # outstanding release forever, and every later run aborts with "There are
+      # untagged, merged release PRs outstanding" instead of opening the next
+      # release PR. Nothing else clears the label in this setup, so we do it
+      # here, before release-please goes looking.
+      - name: Settle merged release PRs left pending
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh pr list --state merged --base dev --limit 20 \
+            --label 'autorelease: pending' --json number --jq '.[].number' |
+          while read -r pr; do
+            echo "settling #$pr"
+            gh pr edit "$pr" \
+              --remove-label 'autorelease: pending' \
+              --add-label 'autorelease: tagged'
+          done
+
       # release-please is used here purely as a changelog generator. dev is the
       # only branch it manages, and merging its release PR touches nothing but
       # CHANGELOG.md: release-type "simple" would write version.txt, but only if
