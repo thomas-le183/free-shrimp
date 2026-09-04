@@ -3,8 +3,9 @@
 A playground for testing [release-please](https://github.com/googleapis/release-please-action).
 
 Here it is used as a **changelog generator only**. It computes a version, but that version is
-release-please's own bookkeeping — it is never written to `package.json`, never tagged, and never
-published as a GitHub Release.
+release-please's own bookkeeping — it is never written to `package.json` and never published as a
+GitHub Release. A bare `v<version>` git tag *is* pushed, purely so release-please knows where the
+last changelog entry stopped; nothing is published or installable from it.
 
 ## What's here
 
@@ -26,7 +27,8 @@ published as a GitHub Release.
 ```
 feature PR ──► dev ──► release PR "chore(dev): release 0.2.0"
                           └─ merge ──► CHANGELOG-DEV.md + manifest updated
-                                       (no tag, no release, no package.json bump)
+                                       (bookkeeping tag only, no release,
+                                        no package.json bump)
 ```
 
 Develop and QC work on `dev`. Every batch of conventional commits that lands there rolls into the
@@ -45,9 +47,15 @@ Two settings in [`release-please-config.json`](release-please-config.json) do al
 "skip-github-release": true,
 ```
 
-- **`skip-github-release`** drops the entire release step — no git tag, no GitHub Release. Version
-  tracking survives because the manifest strategy reads the last version out of
-  `.release-please-manifest.json`, which the release PR itself updates, rather than out of tags.
+- **`skip-github-release`** drops the entire release step — no git tag, no GitHub Release. That
+  covers the *version*: the manifest strategy reads the last version out of
+  `.release-please-manifest.json`, which the release PR itself updates. It does **not** cover the
+  *commit window*. release-please decides what is already changelogged by looking for a GitHub
+  Release and then falling back to a git tag; given neither it bootstraps from the first commit in
+  the repo, re-reads every `feat!` ever merged, and bumps major on every single run. So the
+  workflow pushes a bare `v<version>` tag itself, before invoking release-please. A tag is not a
+  release — nothing is published and nothing appears in the Releases tab. It is bookkeeping, same
+  as the manifest, and it is what makes ordinary minor and patch bumps work.
 - **`release-type: simple`** decides which files get written. Its updater list is exactly
   `CHANGELOG-DEV.md` plus `version.txt`, and the `version.txt` update is registered with
   `createIfMissing: false` — see

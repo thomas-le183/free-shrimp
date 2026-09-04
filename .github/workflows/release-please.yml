@@ -40,13 +40,45 @@ jobs:
               --add-label 'autorelease: tagged'
           done
 
+      # The bookmark release-please reads to decide "what is already in the
+      # changelog". It looks for a GitHub Release first, then falls back to a
+      # plain git tag (manifest.ts, backfillReleasesFromTags). skip-github-release
+      # gives it neither, so every run bootstrapped from commit #1, re-read the
+      # `feat!` commits that are permanently in that window, and bumped major
+      # forever: 0.1.0 -> 1.0.0 -> 2.0.0 -> 3.0.0 with no new work.
+      #
+      # A tag is not a release. Nothing is published, nothing lands in the
+      # Releases tab -- it is silent bookkeeping, exactly like the manifest.
+      # Tagging the manifest's current version bounds the scan window, which is
+      # what makes normal minor/patch bumps work.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Tag the released version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version="$(jq -r '."."' .release-please-manifest.json)"
+          # Must match the manifest exactly; release-please compares the parsed
+          # tag version against it and ignores anything that does not line up.
+          tag="v${version}"
+          if gh api "repos/{owner}/{repo}/git/ref/tags/${tag}" >/dev/null 2>&1; then
+            echo "${tag} already exists"
+            exit 0
+          fi
+          echo "tagging ${GITHUB_SHA} as ${tag}"
+          gh api "repos/{owner}/{repo}/git/refs" \
+            -f "ref=refs/tags/${tag}" \
+            -f "sha=${GITHUB_SHA}"
+
       # release-please is used here purely as a changelog generator. dev is the
       # only branch it manages, and merging its release PR touches nothing but
       # CHANGELOG.md: release-type "simple" would write version.txt, but only if
       # that file already exists, and it does not. skip-github-release means no
-      # tag and no GitHub release either. The version release-please counts with
-      # lives solely in .release-please-manifest.json and is deliberately not
-      # package.json's version. main is not released from — see README.
+      # GitHub Release; the tag it also skips is supplied by the step above, and
+      # is only ever bookkeeping. The version release-please counts with lives in
+      # .release-please-manifest.json and is deliberately not package.json's
+      # version. main is not released from — see README.
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         id: release
         with:
